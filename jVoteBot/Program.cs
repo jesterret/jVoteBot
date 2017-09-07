@@ -36,6 +36,8 @@ namespace jVoteBot
             bot.OnInlineQuery += PoolInlineQuery;
             bot.OnMessage += PoolMessageSetup;
             bot.OnCallbackQuery += PoolAnswerCallback;
+            bot.OnReceiveError += Bot_OnReceiveError;
+            bot.OnReceiveGeneralError += Bot_OnReceiveGeneralError;
             bot.StartReceiving(new[] { UpdateType.MessageUpdate, UpdateType.InlineQueryUpdate, UpdateType.CallbackQueryUpdate });
             ShouldQuit.WaitOne();
             Thread.Sleep(5000);
@@ -45,8 +47,25 @@ namespace jVoteBot
             Thread.Sleep(5000);
         }
 
+        private static void Bot_OnReceiveGeneralError(object sender, Telegram.Bot.Args.ReceiveGeneralErrorEventArgs e)
+        {
+            bot.SendTextMessageAsync(PrivateChatID, e.Exception.ToString());
+            bShouldIgnore = true;
+        }
+
+        private static void Bot_OnReceiveError(object sender, Telegram.Bot.Args.ReceiveErrorEventArgs e)
+        {
+            bot.SendTextMessageAsync(PrivateChatID, e.ApiRequestException.ToString());
+            bShouldIgnore = true;
+        }
+
         private static void PoolAnswerCallback(object sender, Telegram.Bot.Args.CallbackQueryEventArgs e)
         {
+            if (bShouldIgnore)
+            {
+                bShouldIgnore = false;
+                return;
+            }
             var query = e.CallbackQuery;
             var data = query.Data.Split(new[] { '|' });
             if (!string.IsNullOrEmpty(query.InlineMessageId))
@@ -99,6 +118,11 @@ namespace jVoteBot
 
         private static void PoolMessageSetup(object sender, Telegram.Bot.Args.MessageEventArgs e)
         {
+            if (bShouldIgnore)
+            {
+                bShouldIgnore = false;
+                return;
+            }
             var msg = e.Message;
             if(msg.Chat.Type == ChatType.Private)
             {
@@ -202,6 +226,11 @@ namespace jVoteBot
 
         private static void PoolInlineQuery(object sender, Telegram.Bot.Args.InlineQueryEventArgs e)
         {
+            if (bShouldIgnore)
+            {
+                bShouldIgnore = false;
+                return;
+            }
             var query = e.InlineQuery;
             var UserId = query.From.Id;
             var text = query.Query;
@@ -282,5 +311,6 @@ namespace jVoteBot
         const string BOT_GetOption2 = "Keep them coming, I'll stop listening when you send the text `Finish`.";
         const string BOT_PollList = "Here's the list of all the polls you made:";
         const int BOT_MaxButtonLen = 20;
+        static bool bShouldIgnore = false;
     }
 }
