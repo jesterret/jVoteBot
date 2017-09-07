@@ -1,19 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups;
 using Telegram.Bot.Types.InlineKeyboardButtons;
-using System.Data.SqlClient;
-using System.Data.Common;
 using Telegram.Bot.Types.InlineQueryResults;
 using Telegram.Bot.Types.InputMessageContents;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace jVoteBot
 {
@@ -40,10 +38,11 @@ namespace jVoteBot
             bot.OnCallbackQuery += PoolAnswerCallback;
             bot.StartReceiving(new[] { UpdateType.MessageUpdate, UpdateType.InlineQueryUpdate, UpdateType.CallbackQueryUpdate });
             ShouldQuit.WaitOne();
+            Thread.Sleep(5000);
             bot.StopReceiving();
             bot = null;
             pollManager = null;
-            Thread.Sleep(1000);
+            Thread.Sleep(5000);
         }
 
         private static void PoolAnswerCallback(object sender, Telegram.Bot.Args.CallbackQueryEventArgs e)
@@ -54,12 +53,12 @@ namespace jVoteBot
             {
                 if(data.Length == 2)
                 {
-                    if(int.TryParse(data[0], out int pId) && int.TryParse(data[1], out int oId))
+                    if(long.TryParse(data[0], out long pId) && long.TryParse(data[1], out long oId))
                     {
                         var poll = pollManager.GetPoll(pId);
                         if (poll != null)
                         {
-                            pollManager.AddDeleteVote(pId, query.From.Id, oId);
+                            pollManager.AddDeleteVote(pId, query.From, oId);
                             bot.EditInlineMessageTextAsync(query.InlineMessageId, BuildPoolMessage(pId, poll.Name), replyMarkup: new InlineKeyboardMarkup(BuildPoolButtons(pId).ToArray()));
                         }
                     }
@@ -72,7 +71,7 @@ namespace jVoteBot
                 if (data[0] == "pollDelete")
                 {
                     var id = data[1];
-                    if (int.TryParse(id, out int result))
+                    if (long.TryParse(id, out long result))
                     {
                         pollManager.DeletePoll(result, query.From.Id);
                         bot.DeleteMessageAsync(msg.Chat.Id, msg.MessageId);
@@ -103,39 +102,75 @@ namespace jVoteBot
             var msg = e.Message;
             if(msg.Chat.Type == ChatType.Private)
             {
-                foreach(var ent in msg.EntityValues)
+                foreach (var i in Enumerable.Range(0, msg.Entities.Count))
                 {
-                    if(ent[0] == '@')
-                        continue;
-
-                    switch(ent)
+                    var ent = msg.EntityValues[i];
+                    if (msg.Entities[i].Type == MessageEntityType.BotCommand)
                     {
-                        case "/new":
-                        case "/start":
-                            // Get current pool, if not exists then 
-                            var poll = pollManager.GetCurrentSetupPoll(msg.From.Id);
-                            if (poll == null)
-                                bot.SendTextMessageAsync(msg.Chat.Id, BOT_PollName, replyMarkup: new ForceReply() { Force = true });
-                            else
-                                bot.SendTextMessageAsync(msg.Chat.Id, "Finish last pool first...");
-                            break;
-                        case "/list":
-                            var buttons = pollManager.GetPollsByUser(msg.From.Id).Select(p => new[]
-                            {
-                                new InlineKeyboardCallbackButton(p.Name, p.Id.ToString())
-                            });
-                            bot.SendTextMessageAsync(msg.Chat.Id, BOT_PollList, replyMarkup: new InlineKeyboardMarkup() { InlineKeyboard = buttons.ToArray() });
-                            break;
-                        case "/devbreakquit":
-                            if (msg.From.Id == PrivateChatID)
-                            {
-                                ShouldQuit.Set();
-                                return;
-                            }
-                            break;
-                        default:
-                            bot.SendTextMessageAsync(msg.Chat.Id, "Unknown entity: " + ent, replyToMessageId: msg.MessageId);
-                            break;
+                        switch (ent)
+                        {
+                            case "/new":
+                            case "/start":
+                                // Get current pool, if not exists then 
+                                var poll = pollManager.GetCurrentSetupPoll(msg.From.Id);
+                                if (poll == null)
+                                    bot.SendTextMessageAsync(msg.Chat.Id, BOT_PollName, replyMarkup: new ForceReply() { Force = true });
+                                else
+                                    bot.SendTextMessageAsync(msg.Chat.Id, "Finish last pool first...");
+                                break;
+                            case "/list":
+                                var buttons = pollManager.GetPollsByUser(msg.From.Id).Select(p => new[] { new InlineKeyboardCallbackButton(p.Name, p.Id.ToString())});
+                                bot.SendTextMessageAsync(msg.Chat.Id, BOT_PollList, replyMarkup: new InlineKeyboardMarkup() { InlineKeyboard = buttons.ToArray() });
+                                break;
+                            case "/devbreakquit":
+                                if (msg.From.Id == PrivateChatID)
+                                {
+                                    ShouldQuit.Set();
+                                    return;
+                                }
+                                break;
+                            case "/raw":
+                                if (msg.From.Id == PrivateChatID)
+                                {
+                                    var x = msg.Entities[i];
+                                    var offset = x.Offset + x.Length;
+                                    string query = "";
+                                    if (msg.Entities.Count == i + 1)
+                                    {
+                                        query = msg.Text.Substring(offset);
+                                    }
+                                    else
+                                    {
+                                        var y = msg.Entities[i+1];
+                                        query = msg.Text.Substring(offset, y.Offset - offset);
+                                    }
+                                    query = query.Trim();
+                                    if (!query.EndsWith(";"))
+                                        query += ";";
+
+                                    var reader = pollManager.RawQuery(query);
+                                    string recstr = "|";
+                                    foreach (var column in Enumerable.Range(0, reader.FieldCount))
+                                    {
+                                        recstr += reader.GetName(column) + '|';
+                                    }
+                                    foreach (var data in reader)
+                                    {
+                                        var record = data as DbDataRecord;
+                                        recstr += '|';
+                                        foreach (var recordId in Enumerable.Range(0, record.FieldCount))
+                                        {
+                                            recstr += record[recordId].ToString() + '|';
+                                        }
+                                        recstr += Environment.NewLine;
+                                    }
+                                    bot.SendTextMessageAsync(msg.Chat.Id, recstr);
+                                }
+                                break;
+                            default:
+                                bot.SendTextMessageAsync(msg.Chat.Id, "Unknown entity: " + ent, replyToMessageId: msg.MessageId);
+                                break;
+                        }
                     }
                 }
                 var reply = msg.ReplyToMessage;
@@ -143,8 +178,11 @@ namespace jVoteBot
                 {
                     if (reply.Text == BOT_PollName)
                     {
-                        pollManager.AddPoll(msg.From.Id, msg.Text);
-                        bot.SendTextMessageAsync(msg.Chat.Id, BOT_GetOption, replyMarkup: new ForceReply() { Force = true });
+                        if (pollManager.GetCurrentSetupPoll(msg.From.Id) == null)
+                        {
+                            pollManager.AddPoll(msg.From.Id, msg.Text);
+                            bot.SendTextMessageAsync(msg.Chat.Id, BOT_GetOption, replyMarkup: new ForceReply() { Force = true });
+                        }
                     }
                     else if (reply.Text == BOT_GetOption2 && msg.Text == "Finish")
                     {
@@ -176,7 +214,7 @@ namespace jVoteBot
                 {
                     Id = p.Id.ToString(),
                     Title = p.Name,
-                    Description = p.Description,
+                    Description = "Send pool to chat",
                     ReplyMarkup = new InlineKeyboardMarkup(opt.ToArray()),
                     InputMessageContent = new InputTextMessageContent()
                     {
@@ -184,54 +222,59 @@ namespace jVoteBot
                     }
                 };
             }).ToArray();
-           bot.AnswerInlineQueryAsync(query.Id, req, 0);
+            bot.AnswerInlineQueryAsync(query.Id, req, 0);
         }
 
-        private static string BuildPoolMessage(int PollId, string PollName)
+        private static string BuildPoolMessage(long PollId, string PollName)
         {
             var options = pollManager.GetPollOptions(PollId);
-            return PollName + Environment.NewLine + string.Join(Environment.NewLine, options.Select(o =>
-            {
-                var votes = pollManager.GetPollVotes(PollId);
-                return $"{o.Text}: " + Environment.NewLine + string.Join(", ", votes.Where(v => v.OptId == o.Id).Select(v =>
-                {
-                    return GetChatUserName(v.UserId, v.UserId);
-                }));
-            }));
+            return PollName + Environment.NewLine + 
+                                string.Join(Environment.NewLine, options.Select(o => 
+                                    $"{o.Text}: " 
+                                    + Environment.NewLine 
+                                    + string.Join(", ", pollManager.GetPollVotes(PollId).Where(v => v.OptId == o.Id).Select(v => pollManager.GetUsername(v.UserId))))
+                                );
         }
 
-        private static IEnumerable<InlineKeyboardButton[]> BuildPoolButtons(int PollId)
+        private static IEnumerable<InlineKeyboardButton[]> BuildPoolButtons(long PollId)
         {
             var options = pollManager.GetPollOptions(PollId);
             return options.Select(o => new InlineKeyboardCallbackButton(o.Text, $"{PollId}|{o.Id}")).Partition(BOT_MaxButtonLen);
         }
 
-        private static string UserToString(Telegram.Bot.Types.User user)
+        public static string UserToString(Telegram.Bot.Types.User chat)
         {
-            if (string.IsNullOrEmpty(user.Username))
+            if (string.IsNullOrEmpty(chat.Username))
             {
-                if (string.IsNullOrEmpty(user.LastName))
-                    return user.FirstName;
+                if (string.IsNullOrEmpty(chat.LastName))
+                    return chat.FirstName;
                 else
-                    return $"{user.FirstName} {user.LastName}";
+                    return $"{chat.FirstName} {chat.LastName}";
             }
             else
-                return $"@{user.Username}";
+                return $"@{chat.Username}";
         }
 
-        public static async Task<string> GetChatUserNameAsync(int ChatId, int UserId)
+        public static async Task<string> GetChatUserNameAsync(int UserId)
         {
             string retn = string.Empty;
-            var user = (await bot.GetChatMemberAsync(ChatId, UserId)).User;
-            return UserToString(user);
-
+            var me = await bot.GetMeAsync();
+            var chat = await bot.GetChatMemberAsync(UserId, UserId);
+            return UserToString(chat.User);
         }
 
-        public static string GetChatUserName(int ChatId, int UserId)
+        public static string GetChatUserName(int UserId)
         {
-            var ret = GetChatUserNameAsync(ChatId, UserId);
-            ret.Wait();
-            return ret.Result;
+            var ret = GetChatUserNameAsync(UserId);
+            try
+            {
+                ret.Wait();
+                return ret.Result;
+            }
+            catch (Exception ex)
+            {
+            }
+            return string.Empty;
         }
 
         const string BOT_PollName = "What's the poll name?";

@@ -1,47 +1,42 @@
-﻿using System;
+﻿using jVoteBot.PollData;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Data.SqlClient;
-using System.Data.Common;
+using System.Data.SQLite;
 using System.IO;
-using Telegram.Bot.Types.InlineKeyboardButtons;
-using Telegram.Bot.Types.InlineQueryResults;
-using Telegram.Bot.Types.InputMessageContents;
-using jVoteBot.PollData;
 
 namespace jVoteBot
 {
     class PollManager
     {
-        const string SelectMaxIdPolls = "select MAX(Id) from Polls;";
+        const string SelectMaxIdPolls = "select MAX(Id) from Poll;";
         const string SelectMaxIdPollOptions = "select MAX(Id) from PollOption;";
         const string SelectMaxIdPollVotes = "select MAX(Id) from PollVote;";
 
+        const string SelectUserExists = "select count(*) from PollUser where Id = @Id;";
         const string SelectUserOptionVoteExists = "select count(*) from PollVote where UserId = @UserId and OptionId = @OptId;";
 
-        const string SelectPollByUserId = "select * from Polls where UserId = @UserId and Status = 1;";
-        const string SelectPollByUserIdNotSetup = "select * from Polls where UserId = @UserId and Status = 0;";
-        const string SelectPollByPollId = "select * from Polls where Id = @PollId and Status = 1;";
+        const string SelectPollByUserId = "select * from Poll where UserId = @UserId and Status = 1;";
+        const string SelectPollByUserIdNotSetup = "select * from Poll where UserId = @UserId and Status = 0;";
+        const string SelectPollByPollId = "select * from Poll where Id = @PollId and Status = 1;";
         const string SelectOptionsByPollId = "select * from PollOption where PollId = @PollId;";
         const string SelectUserVotesByPollId = "select * from PollVote where PollId = @PollId and UserId = @UserId;";
         const string SelectVotesByPollId = "select * from PollVote where PollId = @PollId;";
+        const string SelectUserById = "select * from PollUser where Id = @UserId;";
 
-        const string InsertPoll = "insert into Polls (Id, UserId, Status, Name, Description) values (@Id, @UserId, @Status, @Name, @Description);";
-        const string InsertPollOption = "insert into PollOption (Id, PollId, Text) values (@Id, @PollId, @Opt);";
+        const string InsertPoll = "insert into Poll (Id, UserId, Status, Name) values (@Id, @UserId, @Status, @Name);";
+        const string InsertOption = "insert into PollOption (Id, PollId, Text) values (@Id, @PollId, @Opt);";
         const string InsertVote = "insert into PollVote (Id, PollId, OptionId, UserId) values (@Id, @PollId, @OptId, @UserId);";
+        const string InsertUser = "insert into PollUser (Id, Name) values (@Id, @Name);";
 
-        const string DeletePollQuery = "delete from Polls where Id = @PollId and UserId = @UserId;";
+        const string DeletePollQuery = "delete from Poll where Id = @PollId and UserId = @UserId;";
         const string DeletePollOptions = "delete from PollOption where PollId = @PollId;";
         const string DeletePollVotes = "delete from PollVote where PollId = @PollId;";
-
         const string DeletePollUserVote = "delete from PollVote where PollId = @PollId and UserId = @UserId and OptionId = @OptId;";
 
-        const string UpdatePollStatus = "update Polls set Status = @Status where Id = @Id;";
-
-        public SqlConnection sqlConnection = new SqlConnection($"Data Source=(LocalDB)\\MSSQLLocalDB;AttachDbFilename=\"{Path.Combine(Program.GetDirectory(), "PollDatabase.mdf")}\";Integrated Security=True;MultipleActiveResultSets=True");
+        const string UpdatePollStatus = "update Poll set Status = 1 where Id = @Id;";
+        const string UpdatePollUserName = "update PollUser set Name = @Name where Id = @Id;";
         
+        public SQLiteConnection sqlConnection = new SQLiteConnection($"Data Source=\"{Path.Combine(Program.GetDirectory(), "PollDatabase.sqlite")}\";Version=3;");
         public PollManager()
         {
             sqlConnection.Open();
@@ -51,22 +46,37 @@ namespace jVoteBot
             sqlConnection.Close();
         }
 
-        public SqlDataReader RawQuery(string query)
+        public SQLiteDataReader RawQuery(string query)
         {
             var cmd = sqlConnection.CreateCommand();
             cmd.CommandText = query;
             return cmd.ExecuteReader();
         }
-        
-        public Poll GetPoll(int PollId)
+
+        public PollUser GetUser(int UserId)
         {
-            using (var command = new SqlCommand(SelectPollByPollId, sqlConnection))
+            using (var command = sqlConnection.CreateCommand())
             {
+                command.CommandText = SelectUserById;
+                command.Parameters.AddWithValue("@UserId", UserId);
+                using (var reader = command.ExecuteReader())
+                {
+                    reader.Read();
+                    return new PollUser((int)reader["Id"], reader["Name"] as string);
+                }
+            }
+        }
+        
+        public Poll GetPoll(long PollId)
+        {
+            using (var command = sqlConnection.CreateCommand())
+            {
+                command.CommandText = SelectPollByPollId;
                 command.Parameters.AddWithValue("@PollId", PollId);
                 using (var reader = command.ExecuteReader())
                 {
                     reader.Read();
-                    return new Poll((int)reader["Id"], (int)reader["UserId"], (int)reader["Status"], reader["Name"] as string, reader["Description"] as string);
+                    return new Poll((long)reader["Id"], (int)reader["UserId"], (int)reader["Status"], reader["Name"] as string);
                 }
             }
         }
@@ -75,13 +85,14 @@ namespace jVoteBot
         {
             try
             {
-                using (var command = new SqlCommand(SelectPollByUserIdNotSetup, sqlConnection))
+                using (var command = sqlConnection.CreateCommand())
                 {
+                    command.CommandText = SelectPollByUserIdNotSetup;
                     command.Parameters.AddWithValue("@UserId", UserId);
                     using (var reader = command.ExecuteReader())
                     {
                         reader.Read();
-                        return new Poll((int)reader["Id"], (int)reader["UserId"], (int)reader["Status"], reader["Name"] as string, reader["Description"] as string);
+                        return new Poll((long)reader["Id"], (int)reader["UserId"], (int)reader["Status"], reader["Name"] as string);
                     }
                 }
             }
@@ -91,46 +102,50 @@ namespace jVoteBot
 
         public IEnumerable<Poll> GetPollsByUser(int UserId)
         {
-            using (var command = new SqlCommand(SelectPollByUserId, sqlConnection))
+            using (var command = sqlConnection.CreateCommand())
             {
+                command.CommandText = SelectPollByUserId;
                 command.Parameters.AddWithValue("@UserId", UserId);
                 using (var reader = command.ExecuteReader())
                     while (reader.Read())
-                        yield return new Poll((int)reader["Id"], (int)reader["UserId"], (int)reader["Status"], reader["Name"] as string, reader["Description"] as string);
+                        yield return new Poll((long)reader["Id"], (int)reader["UserId"], (int)reader["Status"], reader["Name"] as string);
             }
         }
 
-        public IEnumerable<PollOption> GetPollOptions(int PollId)
+        public IEnumerable<PollOption> GetPollOptions(long PollId)
         {
-            using (var command = new SqlCommand(SelectOptionsByPollId, sqlConnection))
+            using (var command = sqlConnection.CreateCommand())
             {
+                command.CommandText = SelectOptionsByPollId;
                 command.Parameters.AddWithValue("@PollId", PollId);
                 using (var reader = command.ExecuteReader())
                     while (reader.Read())
-                        yield return new PollOption((int)reader["Id"], (int)reader["PollId"], reader["Text"] as string);
+                        yield return new PollOption((long)reader["Id"], (long)reader["PollId"], reader["Text"] as string);
             }
         }
 
-        public IEnumerable<PollVote> GetUserPollVotes(int PollId, int UserId)
+        public IEnumerable<PollVote> GetUserPollVotes(long PollId, int UserId)
         {
-            using (var command = new SqlCommand(SelectUserVotesByPollId, sqlConnection))
+            using (var command = sqlConnection.CreateCommand())
             {
+                command.CommandText = SelectUserVotesByPollId;
                 command.Parameters.AddWithValue("@PollId", PollId);
                 command.Parameters.AddWithValue("@UserId", UserId);
                 using (var reader = command.ExecuteReader())
                     while (reader.Read())
-                        yield return new PollVote((int)reader["Id"], PollId, UserId, (int)reader["OptId"]);
+                        yield return new PollVote((long)reader["Id"], PollId, UserId, (long)reader["OptId"]);
             }
         }
 
-        public IEnumerable<PollVote> GetPollVotes(int PollId)
+        public IEnumerable<PollVote> GetPollVotes(long PollId)
         {
-            using (var command = new SqlCommand(SelectVotesByPollId, sqlConnection))
+            using (var command = sqlConnection.CreateCommand())
             {
+                command.CommandText = SelectVotesByPollId;
                 command.Parameters.AddWithValue("@PollId", PollId);
                 using (var reader = command.ExecuteReader())
                     while (reader.Read())
-                        yield return new PollVote((int)reader["Id"], PollId, (int)reader["UserId"], (int)reader["OptionId"]);
+                        yield return new PollVote((long)reader["Id"], PollId, (int)reader["UserId"], (long)reader["OptionId"]);
             }
         }
 
@@ -139,9 +154,9 @@ namespace jVoteBot
             var poll = GetCurrentSetupPoll(UserId);
             if (poll != null)
             {
-                using (var command = new SqlCommand(UpdatePollStatus, sqlConnection))
+                using (var command = sqlConnection.CreateCommand())
                 {
-                    command.Parameters.AddWithValue("@Status", 1);
+                    command.CommandText = UpdatePollStatus;
                     command.Parameters.AddWithValue("@Id", poll.Id);
                     command.ExecuteNonQuery();
                     return poll.Name;
@@ -150,85 +165,145 @@ namespace jVoteBot
             return null;
         }
         
-        public void AddPoll(int UserId, string Name, string Description = null)
+        public long AddPoll(int UserId, string Name)
         {
-            using (var command = new SqlCommand(InsertPoll, sqlConnection))
+            var Id = GetLastID(SelectMaxIdPolls);
+            using (var command = sqlConnection.CreateCommand())
             {
-                var Id = GetLastID(SelectMaxIdPolls);
+                command.CommandText = InsertPoll;
                 command.Parameters.AddWithValue("@Id", Id);
                 command.Parameters.AddWithValue("@UserId", UserId);
                 command.Parameters.AddWithValue("@Status", 0);
                 command.Parameters.AddWithValue("@Name", Name);
-                command.Parameters.AddWithValue("@Description", Description ?? "Send pool to chat");
                 command.ExecuteNonQuery();
             }
+            return Id;
         }
 
-        public void AddPollOption(int PollId, string Option)
+        public long AddPollOption(long PollId, string Option)
         {
-            using (var command = new SqlCommand(InsertPollOption, sqlConnection))
+            var Id = GetLastID(SelectMaxIdPollOptions);
+            using (var command = sqlConnection.CreateCommand())
             {
-                command.Parameters.AddWithValue("@Id", GetLastID(SelectMaxIdPollOptions));
+                command.CommandText = InsertOption;
+                command.Parameters.AddWithValue("@Id", Id);
                 command.Parameters.AddWithValue("@PollId", PollId);
                 command.Parameters.AddWithValue("@Opt", Option);
                 command.ExecuteNonQuery();
             }
+            return Id;
         }
 
-        public void AddDeleteVote(int PollId, int UserId, int OptId)
+        public void AddDeleteVote(long PollId, Telegram.Bot.Types.User user, long OptId)
         {
-            using (var command = new SqlCommand(SelectUserOptionVoteExists, sqlConnection))
+            using (var command = sqlConnection.CreateCommand())
             {
-                command.Parameters.AddWithValue("@UserId", UserId);
+                TryAddUser(user.Id, Program.UserToString(user));
+                command.CommandText = SelectUserOptionVoteExists;
+                command.Parameters.AddWithValue("@UserId", user.Id);
                 command.Parameters.AddWithValue("@OptId", OptId);
-                var val = (int)command.ExecuteScalar();
+                var val = (long)command.ExecuteScalar();
                 if(val > 0)
-                    DeleteVote(PollId, UserId, OptId);
+                    DeleteVote(PollId, user.Id, OptId);
                 else if (val == 0)
-                    AddVote(GetLastID(SelectMaxIdPollVotes), PollId, UserId, OptId);
+                    AddVote(GetLastID(SelectMaxIdPollVotes), PollId, user.Id, OptId);
             }
         }
 
-        public void DeletePoll(int PollId, int UserId)
+        public void DeletePoll(long PollId, int UserId)
         {
-            using (var command = new SqlCommand(DeletePollQuery, sqlConnection))
+            using (var command = sqlConnection.CreateCommand())
             {
+                command.CommandText = DeletePollQuery;
                 command.Parameters.AddWithValue("@PollId", PollId);
                 command.Parameters.AddWithValue("@UserId", UserId);
                 command.ExecuteNonQuery();
             }
-            using (var command = new SqlCommand(DeletePollOptions, sqlConnection))
+            using (var command = sqlConnection.CreateCommand())
             {
+                command.CommandText = DeletePollOptions;
                 command.Parameters.AddWithValue("@PollId", PollId);
                 command.ExecuteNonQuery();
             }
-            using (var command = new SqlCommand(DeletePollVotes, sqlConnection))
+            using (var command = sqlConnection.CreateCommand())
             {
+                command.CommandText = DeletePollVotes;
                 command.Parameters.AddWithValue("@PollId", PollId);
                 command.ExecuteNonQuery();
             }
         }
 
-        private int GetLastID(string Query)
+        public string GetUsername(int Id)
         {
-            int Id = 0;
+            return GetUser(Id).Name;
+        }
+
+        private bool GetUserExists(int UserId)
+        {
+            using (var command = sqlConnection.CreateCommand())
+            {
+                command.CommandText = SelectUserExists;
+                command.Parameters.AddWithValue("@Id", UserId);
+                var count = command.ExecuteScalar();
+                return (long)count > 0;
+            }
+        }
+
+        private long GetLastID(string Query)
+        {
+            long Id = 0;
             var data = RawQuery(Query);
             try
             {
                 while (data.Read())
                 {
-                    Id = data.GetInt32(0) + 1;
+                    var val = data.GetInt64(0);
+                    if (val == long.MaxValue)
+                        throw new OverflowException();
+                    Id = val + 1;
                     break;
                 }
+                data.Close();
             }
             catch { }
             return Id;
         }
 
-        private void AddVote(int Id, int PollId, int UserId, int OptId)
+        private void TryAddUser(int Id, string Name)
         {
-            using (var command = new SqlCommand(InsertVote, sqlConnection))
+            if (!GetUserExists(Id))
+                AddUser(Id, Name);
+            else
+                UpdateUser(Id, Name);
+        }
+
+        private void AddUser(int Id, string Name)
+        {
+            using (var command = sqlConnection.CreateCommand())
             {
+                command.CommandText = InsertUser;
+                command.Parameters.AddWithValue("@Id", Id);
+                command.Parameters.AddWithValue("@Name", Name);
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private void UpdateUser(int Id, string Name)
+        {
+            using (var command = sqlConnection.CreateCommand())
+            {
+                command.CommandText = UpdatePollUserName;
+                command.Parameters.AddWithValue("@Name", Name);
+                command.Parameters.AddWithValue("@Id", Id);
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private void AddVote(long Id, long PollId, int UserId, long OptId)
+        {
+            using (var command = sqlConnection.CreateCommand())
+            {
+                command.CommandText = InsertVote;
                 command.Parameters.AddWithValue("@Id", Id);
                 command.Parameters.AddWithValue("@PollId", PollId);
                 command.Parameters.AddWithValue("@UserId", UserId);
@@ -237,10 +312,11 @@ namespace jVoteBot
             }
         }
 
-        private void DeleteVote(int PollId, int UserId, int OptId)
+        private void DeleteVote(long PollId, int UserId, long OptId)
         {
-            using (var command = new SqlCommand(DeletePollUserVote, sqlConnection))
+            using (var command = sqlConnection.CreateCommand())
             {
+                command.CommandText = DeletePollUserVote;
                 command.Parameters.AddWithValue("@PollId", PollId);
                 command.Parameters.AddWithValue("@UserId", UserId);
                 command.Parameters.AddWithValue("@OptId", OptId);
