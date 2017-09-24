@@ -55,30 +55,40 @@ namespace jVoteBot
 
         public PollUser GetUser(int UserId)
         {
-            using (var command = sqlConnection.CreateCommand())
+            try
             {
-                command.CommandText = SelectUserById;
-                command.Parameters.AddWithValue("@UserId", UserId);
-                using (var reader = command.ExecuteReader())
+                using (var command = sqlConnection.CreateCommand())
                 {
-                    reader.Read();
-                    return new PollUser((int)reader["Id"], reader["Name"] as string);
+                    command.CommandText = SelectUserById;
+                    command.Parameters.AddWithValue("@UserId", UserId);
+                    using (var reader = command.ExecuteReader())
+                    {
+                        reader.Read();
+                        return new PollUser((int)reader["Id"], reader["Name"] as string);
+                    }
                 }
             }
+            catch { }
+            return null;
         }
         
         public Poll GetPoll(long PollId)
         {
-            using (var command = sqlConnection.CreateCommand())
+            try
             {
-                command.CommandText = SelectPollByPollId;
-                command.Parameters.AddWithValue("@PollId", PollId);
-                using (var reader = command.ExecuteReader())
+                using (var command = sqlConnection.CreateCommand())
                 {
-                    reader.Read();
-                    return new Poll((long)reader["Id"], (int)reader["UserId"], (int)reader["Status"], reader["Name"] as string);
+                    command.CommandText = SelectPollByPollId;
+                    command.Parameters.AddWithValue("@PollId", PollId);
+                    using (var reader = command.ExecuteReader())
+                    {
+                        reader.Read();
+                        return new Poll((long)reader["Id"], (int)reader["UserId"], (int)reader["Status"], reader["Name"] as string);
+                    }
                 }
             }
+            catch { }
+            return null;
         }
 
         public Poll GetCurrentSetupPoll(int UserId)
@@ -235,7 +245,7 @@ namespace jVoteBot
 
         public string GetUsername(int Id)
         {
-            return GetUser(Id).Name;
+            return GetUser(Id)?.Name;
         }
 
         private bool GetUserExists(int UserId)

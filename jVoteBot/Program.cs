@@ -56,7 +56,6 @@ namespace jVoteBot
         private static void Bot_OnReceiveError(object sender, Telegram.Bot.Args.ReceiveErrorEventArgs e)
         {
             bot.SendTextMessageAsync(PrivateChatID, e.ApiRequestException.ToString());
-            bShouldIgnore = true;
         }
 
         private static void PoolAnswerCallback(object sender, Telegram.Bot.Args.CallbackQueryEventArgs e)
@@ -178,6 +177,7 @@ namespace jVoteBot
                                     {
                                         recstr += reader.GetName(column) + '|';
                                     }
+                                    recstr += Environment.NewLine;
                                     foreach (var data in reader)
                                     {
                                         var record = data as DbDataRecord;
@@ -261,7 +261,7 @@ namespace jVoteBot
                                 string.Join(Environment.NewLine, options.Select(o => 
                                     $"{o.Text}: " 
                                     + Environment.NewLine 
-                                    + string.Join(", ", pollManager.GetPollVotes(PollId).Where(v => v.OptId == o.Id).Select(v => pollManager.GetUsername(v.UserId))))
+                                    + string.Join(", ", pollManager.GetPollVotes(PollId).Where(v => v.OptId == o.Id).Select(v => pollManager.GetUsername(v.UserId) ?? "Unknown Username")))
                                 );
         }
 
