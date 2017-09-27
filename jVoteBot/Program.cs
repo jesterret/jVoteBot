@@ -235,7 +235,9 @@ namespace jVoteBot
             var UserId = query.From.Id;
             var text = query.Query;
 
-            var req = pollManager.GetPollsByUser(UserId).Select(p =>
+            var req = pollManager.GetPollsByUser(UserId)
+                .Where(p => p.Name.Contains(text))
+                .Select(p =>
             {
                 var opt = BuildPoolButtons(p.Id);
                 var message = BuildPoolMessage(p.Id, p.Name);
@@ -257,10 +259,10 @@ namespace jVoteBot
         private static string BuildPoolMessage(long PollId, string PollName)
         {
             var options = pollManager.GetPollOptions(PollId);
-            return PollName + Environment.NewLine + 
-                                string.Join(Environment.NewLine, options.Select(o => 
-                                    $"{o.Text}: " 
-                                    + Environment.NewLine 
+            return PollName + Environment.NewLine +
+                                string.Join(Environment.NewLine, options.Select(o =>
+                                    $"{o.Text}: "
+                                    + Environment.NewLine
                                     + string.Join(", ", pollManager.GetPollVotes(PollId).Where(v => v.OptId == o.Id).Select(v => pollManager.GetUsername(v.UserId) ?? "Unknown Username")))
                                 );
         }
@@ -294,15 +296,13 @@ namespace jVoteBot
 
         public static string GetChatUserName(int UserId)
         {
-            var ret = GetChatUserNameAsync(UserId);
             try
             {
+                var ret = GetChatUserNameAsync(UserId);
                 ret.Wait();
                 return ret.Result;
             }
-            catch (Exception ex)
-            {
-            }
+            catch { }
             return string.Empty;
         }
 
