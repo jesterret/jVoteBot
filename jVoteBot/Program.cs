@@ -259,12 +259,20 @@ namespace jVoteBot
         private static string BuildPoolMessage(long PollId, string PollName)
         {
             var options = pollManager.GetPollOptions(PollId);
-            return PollName + Environment.NewLine +
-                                string.Join(Environment.NewLine, options.Select(o =>
-                                    $"{o.Text}: "
-                                    + Environment.NewLine
-                                    + string.Join(", ", pollManager.GetPollVotes(PollId).Where(v => v.OptId == o.Id).Select(v => pollManager.GetUsername(v.UserId) ?? "Unknown Username")))
-                                );
+            var votes = pollManager.GetPollVotes(PollId);
+            var message = PollName + Environment.NewLine;
+            foreach (var opt in options)
+            {
+                var optVotes = votes.Where(v => v.OptId == opt.Id);
+                if (optVotes.Any())
+                {
+                    message += $"{opt.Id}. {opt.Text}: " 
+                        + Environment.NewLine 
+                        + string.Join(", ", optVotes.Select(v => pollManager.GetUsername(v.UserId) ?? "Unknown Username"))
+                        + Environment.NewLine;
+                }
+            }
+            return message;
         }
 
         private static IEnumerable<InlineKeyboardButton[]> BuildPoolButtons(long PollId)
