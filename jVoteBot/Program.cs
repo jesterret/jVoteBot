@@ -33,9 +33,9 @@ namespace jVoteBot
 
         static void Main(string[] args)
         {
-            bot.OnInlineQuery += PoolInlineQuery;
-            bot.OnMessage += PoolMessageSetup;
-            bot.OnCallbackQuery += PoolAnswerCallback;
+            bot.OnInlineQuery += PollInlineQuery;
+            bot.OnMessage += PollMessage;
+            bot.OnCallbackQuery += PollAnswerCallback;
             bot.OnReceiveError += Bot_OnReceiveError;
             bot.OnReceiveGeneralError += Bot_OnReceiveGeneralError;
             bot.StartReceiving(new[] { UpdateType.MessageUpdate, UpdateType.InlineQueryUpdate, UpdateType.CallbackQueryUpdate });
@@ -58,7 +58,7 @@ namespace jVoteBot
             bot.SendTextMessageAsync(PrivateChatID, e.ApiRequestException.ToString());
         }
 
-        private static void PoolAnswerCallback(object sender, Telegram.Bot.Args.CallbackQueryEventArgs e)
+        private static void PollAnswerCallback(object sender, Telegram.Bot.Args.CallbackQueryEventArgs e)
         {
             if (bShouldIgnore)
             {
@@ -115,7 +115,7 @@ namespace jVoteBot
             }
         }
 
-        private static void PoolMessageSetup(object sender, Telegram.Bot.Args.MessageEventArgs e)
+        private static void PollMessage(object sender, Telegram.Bot.Args.MessageEventArgs e)
         {
             if (bShouldIgnore)
             {
@@ -145,7 +145,7 @@ namespace jVoteBot
                                 var buttons = pollManager.GetPollsByUser(msg.From.Id).Select(p => new[] { new InlineKeyboardCallbackButton(p.Name, p.Id.ToString())});
                                 bot.SendTextMessageAsync(msg.Chat.Id, BOT_PollList, replyMarkup: new InlineKeyboardMarkup() { InlineKeyboard = buttons.ToArray() });
                                 break;
-                            case "/devbreakquit":
+                            case "/hcf": // halt & catch fire
                                 if (msg.From.Id == PrivateChatID)
                                 {
                                     ShouldQuit.Set();
@@ -213,7 +213,7 @@ namespace jVoteBot
                         var name = pollManager.SetPoolFinished(msg.From.Id);
                         // send share links
                         var share = new[] { new[] { new InlineKeyboardSwitchInlineQueryButton("Share poll", name) } };
-                        bot.SendTextMessageAsync(msg.Chat.Id, "Here's the share link you can use to show the poll to people:", replyMarkup: new InlineKeyboardMarkup(share));
+                        bot.SendTextMessageAsync(msg.Chat.Id, "Here's the share link you can use to show the poll to people easily:", replyMarkup: new InlineKeyboardMarkup(share));
                     }
                     else
                     {
@@ -224,7 +224,7 @@ namespace jVoteBot
             }
         }
 
-        private static void PoolInlineQuery(object sender, Telegram.Bot.Args.InlineQueryEventArgs e)
+        private static void PollInlineQuery(object sender, Telegram.Bot.Args.InlineQueryEventArgs e)
         {
             if (bShouldIgnore)
             {
@@ -258,15 +258,16 @@ namespace jVoteBot
 
         private static string BuildPoolMessage(long PollId, string PollName)
         {
-            var options = pollManager.GetPollOptions(PollId);
+            var options = pollManager.GetPollOptions(PollId).ToList();
             var votes = pollManager.GetPollVotes(PollId);
             var message = PollName + Environment.NewLine;
-            foreach (var opt in options)
+            for (int i = 0; i < options.Count(); i++)
             {
+                var opt = options[i];
                 var optVotes = votes.Where(v => v.OptId == opt.Id);
                 if (optVotes.Any())
                 {
-                    message += $"{opt.Id}. {opt.Text}: " 
+                    message += $"{i}. {opt.Text}: " 
                         + Environment.NewLine 
                         + string.Join(", ", optVotes.Select(v => pollManager.GetUsername(v.UserId) ?? "Unknown Username"))
                         + Environment.NewLine;
