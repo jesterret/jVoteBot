@@ -18,28 +18,29 @@ namespace jVoteBot
         public static ManualResetEvent ShouldQuit = new ManualResetEvent(false);
         private static PollManager pollManager = new PollManager();
         static TelegramBotClient bot = new TelegramBotClient(File.ReadAllText(Path.Combine(GetDirectory(), "TelegramApiKey.txt")));
-        internal static Task<Telegram.Bot.Types.User> MeResult = null;
+        internal static Telegram.Bot.Types.User BotInfo = null;
 
-        static string BotUsername => MeResult.Result.Username;
+        static string BotUsername => BotInfo.Username;
         
         public static string GetDirectory()
         {
             return Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
         }
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-            MeResult = bot.GetMeAsync();
+            BotInfo = await bot.GetMeAsync();
             bot.OnInlineQuery += PollInlineQuery;
             bot.OnMessage += PollMessage;
             bot.OnCallbackQuery += PollAnswerCallback;
             bot.OnReceiveError += Bot_OnReceiveError;
             bot.OnReceiveGeneralError += Bot_OnReceiveGeneralError;
-            bot.SendTextMessageAsync(PrivateChatID, "Up!").Wait();
+            await bot.SendTextMessageAsync(PrivateChatID, "Up!");
+            Thread.Sleep(10000);
             bot.StartReceiving(new[] { UpdateType.Message, UpdateType.InlineQuery, UpdateType.CallbackQuery, UpdateType.EditedMessage });
             ShouldQuit.WaitOne();
             Thread.Sleep(5000);
-            bot.SendTextMessageAsync(PrivateChatID, "Down!").Wait();
+            await bot.SendTextMessageAsync(PrivateChatID, "Down!");
             bot.StopReceiving();
             bot = null;
             pollManager = null;
@@ -159,7 +160,6 @@ namespace jVoteBot
             {
                 if (msg.EntityValues != null && msg.Entities != null)
                 {
-                    // msg.Entities[i].Type == MessageEntityType.BotCommand
                     var entVals = msg.EntityValues.ToList();
                     foreach (var i in Enumerable.Range(0, msg.Entities.Count()))
                     {
