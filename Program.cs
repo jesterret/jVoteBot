@@ -17,14 +17,22 @@ namespace jVoteBot
         const int PrivateChatID = 0x28d07dc;
         public static ManualResetEvent ShouldQuit = new ManualResetEvent(false);
         private static PollManager pollManager = new PollManager();
-        static TelegramBotClient bot = new TelegramBotClient(File.ReadAllText(Path.Combine(GetDirectory(), "TelegramApiKey.txt")));
+        static TelegramBotClient bot = new TelegramBotClient(File.ReadAllText(Path.Combine(GetDirectory(), "TelegramApiKey.txt")).Trim());
         internal static Telegram.Bot.Types.User BotInfo = null;
 
         static string BotUsername => BotInfo.Username;
         
         public static string GetDirectory()
         {
-            return Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+            if (IsRunningOnMono())
+                return Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+            else
+                return Environment.CurrentDirectory;
+        }
+
+        public static bool IsRunningOnMono()
+        {
+            return Type.GetType("Mono.Runtime") != null;
         }
 
         static async Task Main(string[] args)
