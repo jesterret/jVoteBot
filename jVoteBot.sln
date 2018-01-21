@@ -1,14 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26730.16
+VisualStudioVersion = 15.0.27130.2020
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jVoteBot", "jVoteBot\jVoteBot.csproj", "{308B470A-0F82-4670-B1AD-B42CD45A4B2A}"
-	ProjectSection(ProjectDependencies) = postProject
-		{D301D360-7497-4BF4-B6C3-A51740EA6AB0} = {D301D360-7497-4BF4-B6C3-A51740EA6AB0}
-	EndProjectSection
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Telegram.Bot", "telegram.bot\src\Telegram.Bot\Telegram.Bot.csproj", "{D301D360-7497-4BF4-B6C3-A51740EA6AB0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "jVoteBot", "jVoteBot.csproj", "{5A564890-9EED-4F4B-BF0E-24576AD721BC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -16,19 +11,15 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{308B470A-0F82-4670-B1AD-B42CD45A4B2A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{308B470A-0F82-4670-B1AD-B42CD45A4B2A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{308B470A-0F82-4670-B1AD-B42CD45A4B2A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{308B470A-0F82-4670-B1AD-B42CD45A4B2A}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D301D360-7497-4BF4-B6C3-A51740EA6AB0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D301D360-7497-4BF4-B6C3-A51740EA6AB0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D301D360-7497-4BF4-B6C3-A51740EA6AB0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D301D360-7497-4BF4-B6C3-A51740EA6AB0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5A564890-9EED-4F4B-BF0E-24576AD721BC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5A564890-9EED-4F4B-BF0E-24576AD721BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5A564890-9EED-4F4B-BF0E-24576AD721BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5A564890-9EED-4F4B-BF0E-24576AD721BC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {F6A9C4CA-DF26-4772-9119-627935D70E7C}
+		SolutionGuid = {115AC7C8-74E0-4853-A15E-04FCC4DEF496}
 	EndGlobalSection
 EndGlobal
